@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distribution Alimentaire</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --vert:    #2D6A4F;
+    --vert-cl: #40916C;
+    --fond:    #F0F7F4;
+    --blanc:   #FFFFFF;
+    --gris:    #6B7280;
+    --gris-cl: #E5EDE9;
+    --rouge:   #DC2626;
+    --orange:  #EA580C;
+    --texte:   #1A2E22;
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--fond); color: var(--texte); min-height: 100vh; }
+
+  header { background: var(--vert); color: #fff; padding: 18px 16px 14px; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .3px; }
+  header p  { font-size: .78rem; opacity: .8; margin-top: 2px; }
+
+  /* Tabs */
+  .tabs { display: flex; background: var(--vert); border-top: 1px solid rgba(255,255,255,.15); }
+  .tab { flex: 1; padding: 10px 4px 8px; font-size: .75rem; font-weight: 700; text-align: center; color: rgba(255,255,255,.6); cursor: pointer; border: none; background: none; text-transform: uppercase; letter-spacing: .5px; transition: color .15s; }
+  .tab.active { color: #fff; border-bottom: 3px solid #fff; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--vert); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: .85rem; font-weight: 600; opacity: 0; transition: opacity .3s; z-index: 100; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  /* Loader */
+  #loader { position: fixed; inset: 0; background: rgba(240,247,244,.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; gap: 12px; }
+  #loader .spin { width: 36px; height: 36px; border: 3px solid var(--gris-cl); border-top-color: var(--vert); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader p { font-size: .88rem; color: var(--gris); }
+
+  .card { background: var(--blanc); border-radius: 14px; margin: 14px 12px; padding: 14px 14px 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .card-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--vert-cl); margin-bottom: 10px; }
+
+  /* Stock */
+  .stock-header, .stock-row { display: grid; grid-template-columns: 1fr 90px 36px; gap: 6px; align-items: center; }
+  .stock-header { font-size: .68rem; font-weight: 700; color: var(--gris); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--gris-cl); }
+  .stock-row { margin-top: 6px; }
+  .stock-row input[type="text"], .stock-row input[type="number"] { width: 100%; border: 1.5px solid var(--gris-cl); border-radius: 8px; padding: 8px 10px; font-size: .9rem; background: var(--fond); color: var(--texte); transition: border-color .15s; }
+  .stock-row input:focus { outline: none; border-color: var(--vert-cl); background: #fff; }
+  .unit-select { width: 100%; border: 1.5px solid var(--gris-cl); border-radius: 8px; padding: 7px 4px; font-size: .78rem; background: var(--fond); color: var(--texte); }
+  .btn-del { width: 32px; height: 32px; border: none; border-radius: 8px; background: #FEE2E2; color: var(--rouge); font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .btn-add { width: 100%; margin-top: 10px; padding: 9px; border: 2px dashed var(--vert-cl); border-radius: 10px; background: transparent; color: var(--vert-cl); font-size: .88rem; font-weight: 600; cursor: pointer; }
+  .btn-add:hover { background: #E8F5EE; }
+
+  /* Foyers DB */
+  .foyer-db-card { background: var(--blanc); border-radius: 14px; margin: 0 12px 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow: hidden; }
+  .foyer-db-header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--gris-cl); }
+  .foyer-db-num { background: var(--vert); color: #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 700; flex-shrink: 0; }
+  .foyer-db-info { flex: 1; }
+  .foyer-db-nom { font-size: .92rem; font-weight: 700; color: var(--texte); }
+  .foyer-db-detail { font-size: .75rem; color: var(--gris); margin-top: 1px; }
+  .foyer-db-actions { display: flex; gap: 6px; }
+  .btn-icon { border: none; border-radius: 8px; padding: 6px 10px; font-size: .78rem; font-weight: 600; cursor: pointer; }
+  .btn-edit { background: #E8F5EE; color: var(--vert-cl); }
+  .btn-danger { background: #FEE2E2; color: var(--rouge); }
+
+  /* Modal foyer */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; align-items: flex-end; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--blanc); border-radius: 20px 20px 0 0; padding: 20px 16px 30px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: var(--texte); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gris); margin-bottom: 5px; }
+  .field input, .field select { width: 100%; border: 1.5px solid var(--gris-cl); border-radius: 10px; padding: 10px 12px; font-size: .92rem; background: var(--fond); color: var(--texte); }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--vert-cl); background: #fff; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .btn-save { background: var(--vert); color: #fff; border: none; border-radius: 12px; padding: 13px; font-size: .92rem; font-weight: 700; cursor: pointer; }
+  .btn-cancel { background: var(--gris-cl); color: var(--texte); border: none; border-radius: 12px; padding: 13px; font-size: .92rem; font-weight: 700; cursor: pointer; }
+  .parts-badge { background: var(--gris-cl); border-radius: 8px; padding: 8px 12px; font-size: .82rem; color: var(--gris); font-weight: 600; text-align: center; margin-top: 8px; }
+
+  /* Foyer inline (onglet distribution) */
+  .foyer-card { background: var(--blanc); border-radius: 14px; margin: 0 12px 10px; padding: 14px; box-shadow: 0 1px 6px rgba(0,0,0,.08); border-left: 4px solid var(--vert-cl); }
+  .foyer-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .foyer-num { background: var(--vert); color: #fff; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 700; flex-shrink: 0; }
+  .foyer-label { flex: 1; font-size: .92rem; font-weight: 700; }
+  .foyer-sub { font-size: .75rem; color: var(--gris); }
+  .checkbox-foyer { width: 22px; height: 22px; accent-color: var(--vert); cursor: pointer; }
+
+  /* Boutons actions */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 12px 14px; }
+  .btn-main { padding: 12px; border: none; border-radius: 12px; font-size: .9rem; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .1s; }
+  .btn-main:active { transform: scale(.97); }
+  .btn-calc { background: var(--vert); color: #fff; }
+  .btn-reset { background: var(--gris-cl); color: var(--texte); }
+  .btn-full { grid-column: 1 / -1; }
+
+  /* Résultats */
+  #resultats { display: none; }
+  .result-foyer { background: var(--blanc); border-radius: 14px; margin: 0 12px 10px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .result-foyer-header { background: var(--vert); color: #fff; padding: 10px 14px; font-weight: 700; font-size: .9rem; display: flex; justify-content: space-between; align-items: center; }
+  .result-foyer-header span { font-size: .78rem; opacity: .85; font-weight: 400; }
+  .result-table { width: 100%; border-collapse: collapse; }
+  .result-table th { background: var(--gris-cl); padding: 7px 12px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gris); text-align: left; }
+  .result-table td { padding: 9px 12px; font-size: .88rem; border-bottom: 1px solid var(--gris-cl); }
+  .result-table tr:last-child td { border-bottom: none; }
+  .qty-val { font-weight: 700; color: var(--vert-cl); }
+  .alert-stock { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 10px; margin: 0 12px 10px; padding: 10px 12px; font-size: .82rem; color: var(--orange); }
+  .alert-stock strong { display: block; margin-bottom: 4px; }
+  .stock-restant { background: var(--blanc); border-radius: 14px; margin: 0 12px 20px; box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow: hidden; }
+  .stock-restant-header { background: var(--vert-cl); color: #fff; padding: 10px 14px; font-weight: 700; font-size: .88rem; }
+  .stock-restant table { width: 100%; border-collapse: collapse; }
+  .stock-restant td { padding: 8px 12px; font-size: .85rem; border-bottom: 1px solid var(--gris-cl); }
+  .stock-restant tr:last-child td { border-bottom: none; }
+  .restant-val { font-weight: 700; }
+  .restant-ok { color: var(--vert-cl); }
+  .restant-warn { color: var(--orange); }
+  .restant-zero { color: var(--rouge); }
+
+  /* Stats */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 12px 0; }
+  .stat-box { background: var(--blanc); border-radius: 14px; padding: 14px; text-align: center; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+  .stat-val { font-size: 1.6rem; font-weight: 800; color: var(--vert); }
+  .stat-label { font-size: .7rem; color: var(--gris); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--gris); }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .empty-state p { font-size: .88rem; }
+
+  .bottom-space { height: 30px; }
+</style>
+</head>
+<body>
+
+<div id="loader"><div class="spin"></div><p>Chargement des données…</p></div>
+<div id="toast"></div>
+
+<header>
+  <h1>🥦 Distribution Alimentaire</h1>
+  <p>Répartition équitable par foyer</p>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('db')">👨‍👩‍👧 Foyers</button>
+    <button class="tab" onclick="switchTab('stock')">📦 Stock</button>
+    <button class="tab" onclick="switchTab('distrib')">⚖️ Distribuer</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════
+     PAGE : BASE DE DONNÉES FOYERS
+════════════════════════════════════ -->
+<div class="page active" id="page-db">
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-val" id="stat-foyers">0</div><div class="stat-label">Foyers enregistrés</div></div>
+    <div class="stat-box"><div class="stat-val" id="stat-pers">0</div><div class="stat-label">Personnes au total</div></div>
+  </div>
+
+  <div style="margin:14px 12px 10px; display:flex; gap:8px; align-items:center">
+    <input type="text" id="searchInput" placeholder="🔍 Rechercher un foyer…"
+      style="flex:1;border:1.5px solid var(--gris-cl);border-radius:10px;padding:9px 12px;font-size:.88rem;background:var(--blanc);"
+      oninput="renderDB()">
+  </div>
+
+  <div id="dbList"></div>
+
+  <div style="margin:0 12px 14px">
+    <button class="btn-add" style="width:100%" onclick="ouvrirModal()">＋ Ajouter un foyer</button>
+  </div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- ═══════════════════════════════════
+     PAGE : STOCK
+════════════════════════════════════ -->
+<div class="page" id="page-stock">
+  <div class="card">
+    <div class="card-title">📦 Aliments disponibles</div>
+    <div class="stock-header"><span>Aliment</span><span>Quantité</span><span></span></div>
+    <div id="stockList"></div>
+    <button class="btn-add" onclick="ajouterAliment()">＋ Ajouter un aliment</button>
+  </div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- ═══════════════════════════════════
+     PAGE : DISTRIBUTION
+════════════════════════════════════ -->
+<div class="page" id="page-distrib">
+  <div class="card" style="padding-bottom:6px">
+    <div class="card-title">👨‍👩‍👧 Sélectionner les foyers à distribuer</div>
+    <p style="font-size:.8rem;color:var(--gris);margin-bottom:10px">Cochez les foyers présents aujourd'hui</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn-icon btn-edit" style="flex:1" onclick="toutSelectionner(true)">✅ Tout sélectionner</button>
+      <button class="btn-icon" style="flex:1;background:var(--gris-cl);color:var(--texte)" onclick="toutSelectionner(false)">☐ Tout désélectionner</button>
+    </div>
+  </div>
+  <div id="foyerDistribList"></div>
+  <div class="actions">
+    <button class="btn-main btn-calc btn-full" onclick="calculer()">⚖️ Calculer la distribution</button>
+  </div>
+  <div class="actions" style="margin-top:-4px">
+    <button class="btn-main btn-reset" onclick="reinitialiserStock()">🔄 Réinitialiser stock</button>
+    <button class="btn-main btn-reset" onclick="exporterTexte()">📋 Copier résumé</button>
+  </div>
+
+  <div id="resultats">
+    <div class="card" style="background:#E8F5EE;border:1.5px solid var(--vert-cl)">
+      <div class="card-title" style="color:var(--vert)">✅ Résultats de la distribution</div>
+      <div id="resumeGlobal" style="font-size:.85rem;color:var(--gris)"></div>
+    </div>
+    <div id="alertesZone"></div>
+    <div id="foyerResultats"></div>
+    <div class="stock-restant">
+      <div class="stock-restant-header">📊 Stock restant après distribution</div>
+      <table id="stockRestantTable"></table>
+    </div>
+  </div>
+  <div class="bottom-space"></div>
+</div>
+
+<!-- ═══════════════════════════════════
+     MODAL FOYER
+════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="fermerModal(event)">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Nouveau foyer</div>
+    <div class="field">
+      <label>Nom / Identifiant</label>
+      <input type="text" id="mNom" placeholder="Ex: Famille Martin, Mme Dupont…">
+    </div>
+    <div class="field">
+      <label>Adresse (optionnel)</label>
+      <input type="text" id="mAdresse" placeholder="Rue, numéro…">
+    </div>
+    <div class="field">
+      <label>Type de foyer</label>
+      <select id="mType" onchange="autoAdultes()">
+        <option value="homme">Homme seul</option>
+        <option value="femme">Femme seule</option>
+        <option value="couple">Couple</option>
+        <option value="autre">Autre / Famille</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Adultes</label>
+        <input type="number" id="mAdultes" value="1" min="1" max="10" oninput="updateParts()">
+      </div>
+      <div class="field">
+        <label>Enfants (−18 ans)</label>
+        <input type="number" id="mEnfants" value="0" min="0" max="15" oninput="updateParts()">
+      </div>
+    </div>
+    <div class="field">
+      <label>Note (optionnel)</label>
+      <input type="text" id="mNote" placeholder="Régime alimentaire, allergie…">
+    </div>
+    <div class="parts-badge" id="partsBadge">👤 1 adulte + 0 enfant — 1.0 parts</div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="fermerModalBtn()">Annuler</button>
+      <button class="btn-save" onclick="sauvegarderFoyer()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   ÉTAT GLOBAL
+══════════════════════════════════════ */
+let foyers = [];
+let aliments = [
+  { id: uid(), nom: 'Riz', qte: 10, unite: 'kg' },
+  { id: uid(), nom: 'Pâtes', qte: 8, unite: 'kg' },
+  { id: uid(), nom: 'Boîtes de conserve', qte: 24, unite: 'unité(s)' },
+  { id: uid(), nom: 'Huile', qte: 5, unite: 'L' },
+];
+let selectionDistrib = new Set();
+let editId = null;
+let activeTab = 'db';
+
+const UNITES = ['kg', 'g', 'L', 'cL', 'unité(s)', 'boîte(s)', 'sachet(s)', 'litre(s)'];
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function poidsTotal(f) { return (f.adultes || 1) + (f.enfants || 0) * 0.6; }
+
+/* ══════════════════════════════════════
+   STOCKAGE PERSISTANT
+══════════════════════════════════════ */
+function chargerDonnees() {
+  try {
+    const rf = localStorage.getItem('foyers-db');
+    if (rf) foyers = JSON.parse(rf);
+    const ra = localStorage.getItem('aliments-db');
+    if (ra) aliments = JSON.parse(ra);
+  } catch(e) { /* première utilisation */ }
+}
+
+function sauvegarderDB() {
+  try {
+    localStorage.setItem('foyers-db', JSON.stringify(foyers));
+    localStorage.setItem('aliments-db', JSON.stringify(aliments));
+  } catch(e) { console.error('Erreur sauvegarde', e); }
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ══════════════════════════════════════
+   NAVIGATION TABS
+══════════════════════════════════════ */
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    el.classList.toggle('active', ['db','stock','distrib'][i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  if (tab === 'distrib') renderDistribList();
+  if (tab === 'db') renderDB();
+}
+
+/* ══════════════════════════════════════
+   BASE DE DONNÉES FOYERS
+══════════════════════════════════════ */
+function renderDB() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const liste = foyers.filter(f =>
+    f.nom.toLowerCase().includes(q) ||
+    (f.adresse||'').toLowerCase().includes(q)
+  );
+
+  // stats
+  document.getElementById('stat-foyers').textContent = foyers.length;
+  document.getElementById('stat-pers').textContent = foyers.reduce((s,f) => s + (f.adultes||1) + (f.enfants||0), 0);
+
+  const el = document.getElementById('dbList');
+  if (liste.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">👨‍👩‍👧</div><p>${foyers.length===0 ? 'Aucun foyer enregistré.<br>Appuyez sur « Ajouter » pour commencer.' : 'Aucun résultat pour cette recherche.'}</p></div>`;
+    return;
+  }
+  el.innerHTML = liste.map((f,i) => {
+    const parts = poidsTotal(f).toFixed(1);
+    const typeLabel = {homme:'Homme seul',femme:'Femme seule',couple:'Couple',autre:'Autre'}[f.type]||'';
+    return `
+    <div class="foyer-db-card">
+      <div class="foyer-db-header">
+        <div class="foyer-db-num">${i+1}</div>
+        <div class="foyer-db-info">
+          <div class="foyer-db-nom">${f.nom}</div>
+          <div class="foyer-db-detail">${typeLabel} · ${f.adultes} adulte(s), ${f.enfants} enfant(s) · ${parts} parts${f.adresse ? ' · 📍'+f.adresse : ''}${f.note ? ' · 📝'+f.note : ''}</div>
+        </div>
+        <div class="foyer-db-actions">
+          <button class="btn-icon btn-edit" onclick="ouvrirModal('${f.id}')">✏️</button>
+          <button class="btn-icon btn-danger" onclick="supprimerFoyer('${f.id}')">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════
+   MODAL FOYER
+══════════════════════════════════════ */
+function ouvrirModal(id) {
+  editId = id || null;
+  document.getElementById('modalTitle').textContent = id ? 'Modifier le foyer' : 'Nouveau foyer';
+  if (id) {
+    const f = foyers.find(x=>x.id===id);
+    if (!f) return;
+    document.getElementById('mNom').value = f.nom;
+    document.getElementById('mAdresse').value = f.adresse||'';
+    document.getElementById('mType').value = f.type;
+    document.getElementById('mAdultes').value = f.adultes;
+    document.getElementById('mEnfants').value = f.enfants;
+    document.getElementById('mNote').value = f.note||'';
+  } else {
+    document.getElementById('mNom').value = '';
+    document.getElementById('mAdresse').value = '';
+    document.getElementById('mType').value = 'homme';
+    document.getElementById('mAdultes').value = 1;
+    document.getElementById('mEnfants').value = 0;
+    document.getElementById('mNote').value = '';
+  }
+  updateParts();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function fermerModal(e) {
+  if (e.target === document.getElementById('modalOverlay')) fermerModalBtn();
+}
+function fermerModalBtn() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function autoAdultes() {
+  const t = document.getElementById('mType').value;
+  if (t === 'couple') document.getElementById('mAdultes').value = 2;
+  else if (t === 'homme' || t === 'femme') document.getElementById('mAdultes').value = 1;
+  updateParts();
+}
+
+function updateParts() {
+  const a = parseInt(document.getElementById('mAdultes').value)||1;
+  const e = parseInt(document.getElementById('mEnfants').value)||0;
+  const p = (a + e * 0.6).toFixed(1);
+  document.getElementById('partsBadge').textContent = `👤 ${a} adulte(s) + ${e} enfant(s) — ${p} parts`;
+}
+
+function sauvegarderFoyer() {
+  const nom = document.getElementById('mNom').value.trim();
+  if (!nom) { alert('Veuillez entrer un nom.'); return; }
+  const data = {
+    nom,
+    adresse: document.getElementById('mAdresse').value.trim(),
+    type: document.getElementById('mType').value,
+    adultes: parseInt(document.getElementById('mAdultes').value)||1,
+    enfants: parseInt(document.getElementById('mEnfants').value)||0,
+    note: document.getElementById('mNote').value.trim(),
+  };
+  if (editId) {
+    const idx = foyers.findIndex(x=>x.id===editId);
+    if (idx>=0) foyers[idx] = { ...foyers[idx], ...data };
+    toast('✅ Foyer modifié');
+  } else {
+    foyers.push({ id: uid(), ...data });
+    toast('✅ Foyer ajouté');
+  }
+  sauvegarderDB();
+  fermerModalBtn();
+  renderDB();
+}
+
+function supprimerFoyer(id) {
+  const f = foyers.find(x=>x.id===id);
+  if (!confirm(`Supprimer "${f?.nom}" ?`)) return;
+  foyers = foyers.filter(x=>x.id!==id);
+  selectionDistrib.delete(id);
+  sauvegarderDB();
+  renderDB();
+  toast('🗑️ Foyer supprimé');
+}
+
+/* ══════════════════════════════════════
+   STOCK
+══════════════════════════════════════ */
+function renderStock() {
+  const el = document.getElementById('stockList');
+  el.innerHTML = aliments.map(a => `
+    <div class="stock-row" data-id="${a.id}" style="margin-bottom:10px;border-bottom:1px solid var(--gris-cl);padding-bottom:10px">
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 36px;gap:6px;align-items:center;margin-bottom:6px">
+        <input type="text" value="${a.nom}" placeholder="Nom de l'aliment"
+          oninput="updateAlimentDirect('${a.id}','nom',this.value)">
+        <button class="btn-del" onclick="supprimerAliment('${a.id}')">✕</button>
+      </div>
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center">
+        <input type="number" value="${a.qte===0?'':a.qte}" min="0" step="0.1"
+          placeholder="Quantité"
+          oninput="updateAlimentDirect('${a.id}','qte',parseFloat(this.value)||0)"
+          style="font-size:1rem;font-weight:700;color:var(--vert)">
+        <select class="unit-select" onchange="updateAlimentDirect('${a.id}','unite',this.value)">
+          ${UNITES.map(u=>`<option ${u===a.unite?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateAlimentDirect(id, champ, val) {
+  const a = aliments.find(x=>x.id===id);
+  if (!a) return;
+  a[champ] = val;
+  // Sauvegarder avec un délai pour ne pas spammer
+  clearTimeout(window._saveTimer);
+  window._saveTimer = setTimeout(() => {
+    sauvegarderDB();
+    toast('💾 Sauvegardé');
+  }, 800);
+}
+
+
+function ajouterAliment() {
+  aliments.push({ id:uid(), nom:'', qte:0, unite:'kg' });
+  renderStock();
+  sauvegarderDB();
+}
+function supprimerAliment(id) {
+  aliments = aliments.filter(x=>x.id!==id);
+  renderStock();
+  sauvegarderDB();
+}
+
+/* ══════════════════════════════════════
+   DISTRIBUTION
+══════════════════════════════════════ */
+function renderDistribList() {
+  // Initialiser la sélection avec tous les foyers
+  if (selectionDistrib.size === 0) foyers.forEach(f => selectionDistrib.add(f.id));
+  const el = document.getElementById('foyerDistribList');
+  if (foyers.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">👨‍👩‍👧</div><p>Aucun foyer enregistré.<br>Allez dans l'onglet <strong>Foyers</strong> pour en ajouter.</p></div>`;
+    return;
+  }
+  el.innerHTML = foyers.map((f,i) => {
+    const checked = selectionDistrib.has(f.id) ? 'checked' : '';
+    const typeLabel = {homme:'Homme seul',femme:'Femme seule',couple:'Couple',autre:'Autre'}[f.type]||'';
+    return `
+    <div class="foyer-card" style="border-left-color:${checked?'var(--vert-cl)':'var(--gris-cl)'}">
+      <div class="foyer-header">
+        <input type="checkbox" class="checkbox-foyer" ${checked}
+          onchange="toggleFoyer('${f.id}',this.checked)">
+        <div style="flex:1">
+          <div class="foyer-label">${f.nom}</div>
+          <div class="foyer-sub">${typeLabel} · ${f.adultes} adulte(s), ${f.enfants} enfant(s) · ${poidsTotal(f).toFixed(1)} parts</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleFoyer(id, val) {
+  val ? selectionDistrib.add(id) : selectionDistrib.delete(id);
+  renderDistribList();
+}
+function toutSelectionner(val) {
+  foyers.forEach(f => val ? selectionDistrib.add(f.id) : selectionDistrib.delete(f.id));
+  renderDistribList();
+}
+
+function calculer() {
+  const foyersActifs = foyers.filter(f => selectionDistrib.has(f.id));
+  if (foyersActifs.length === 0) { alert('Sélectionnez au moins un foyer.'); return; }
+  if (aliments.length === 0) { alert('Ajoutez au moins un aliment dans le stock.'); return; }
+
+  const totalParts = foyersActifs.reduce((s,f)=>s+poidsTotal(f), 0);
+  const distribution = {};
+  const restants = {};
+  aliments.forEach(a => restants[a.id] = a.qte);
+
+  foyersActifs.forEach(f => {
+    distribution[f.id] = {};
+    const ratio = poidsTotal(f) / totalParts;
+    aliments.forEach(a => {
+      let attrib = Math.round(a.qte * ratio * 10) / 10;
+      distribution[f.id][a.id] = attrib;
+      restants[a.id] -= attrib;
+    });
+  });
+  Object.keys(restants).forEach(k => restants[k] = Math.round(restants[k]*100)/100);
+
+  afficherResultats(distribution, restants, totalParts, foyersActifs);
+}
+
+function afficherResultats(distrib, restants, totalParts, foyersActifs) {
+  const zone = document.getElementById('resultats');
+  zone.style.display = 'block';
+  zone.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  document.getElementById('resumeGlobal').innerHTML =
+    `<strong>${foyersActifs.length}</strong> foyers · <strong>${aliments.length}</strong> aliments · Total parts : <strong>${totalParts.toFixed(1)}</strong>`;
+
+  const alertes = aliments.filter(a => restants[a.id] < 0);
+  document.getElementById('alertesZone').innerHTML = alertes.length ? `
+    <div class="alert-stock">
+      <strong>⚠️ Stock insuffisant pour :</strong>
+      ${alertes.map(a=>`${a.nom} (manque ${Math.abs(restants[a.id]).toFixed(1)} ${a.unite})`).join(' · ')}
+    </div>` : '';
+
+  document.getElementById('foyerResultats').innerHTML = foyersActifs.map(f => {
+    const desc = `${f.adultes} adulte(s), ${f.enfants} enfant(s) — ${poidsTotal(f).toFixed(1)} parts`;
+    const lignes = aliments.map(a => {
+      const q = distrib[f.id][a.id];
+      return `<tr><td>${a.nom}</td><td class="qty-val">${q.toFixed(1)} ${a.unite}</td><td style="color:var(--gris);font-size:.78rem">${((q/a.qte)*100).toFixed(0)}%</td></tr>`;
+    }).join('');
+    return `<div class="result-foyer">
+      <div class="result-foyer-header">${f.nom}<span>${desc}</span></div>
+      <table class="result-table"><thead><tr><th>Aliment</th><th>Qté attribuée</th><th>% du stock</th></tr></thead><tbody>${lignes}</tbody></table>
+    </div>`;
+  }).join('');
+
+  document.getElementById('stockRestantTable').innerHTML = aliments.map(a => {
+    const r = restants[a.id];
+    const cls = r<0?'restant-zero':r<a.qte*0.1?'restant-warn':'restant-ok';
+    const icone = r<0?'🔴':r<a.qte*0.1?'🟡':'🟢';
+    return `<tr><td>${icone} ${a.nom}</td><td class="restant-val ${cls}">${r.toFixed(1)} ${a.unite}</td></tr>`;
+  }).join('');
+}
+
+function reinitialiserStock() {
+  if (!confirm('Remettre les quantités de stock à zéro ?')) return;
+  aliments.forEach(a => a.qte = 0);
+  renderStock();
+  sauvegarderDB();
+  document.getElementById('resultats').style.display='none';
+  toast('🔄 Stock remis à zéro');
+}
+
+function exporterTexte() {
+  const foyersActifs = foyers.filter(f => selectionDistrib.has(f.id));
+  const totalParts = foyersActifs.reduce((s,f)=>s+poidsTotal(f),0);
+  const lignes = ['=== DISTRIBUTION ALIMENTAIRE ===', new Date().toLocaleDateString('fr-FR'), ''];
+  foyersActifs.forEach(f => {
+    lignes.push(`📦 ${f.nom} (${f.adultes} adulte(s), ${f.enfants} enfant(s))`);
+    aliments.forEach(a => {
+      const ratio = poidsTotal(f)/totalParts;
+      const q = Math.round(a.qte*ratio*10)/10;
+      lignes.push(`   • ${a.nom} : ${q} ${a.unite}`);
+    });
+    lignes.push('');
+  });
+  navigator.clipboard.writeText(lignes.join('\n'))
+    .then(()=>toast('📋 Résumé copié !'))
+    .catch(()=>alert('Impossible de copier automatiquement.'));
+}
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+function init() {
+  chargerDonnees();
+  document.getElementById('loader').style.display = 'none';
+  renderDB();
+  renderStock();
+}
+init();
+</script>
+</body>
+</html>
